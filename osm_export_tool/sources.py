@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from xml.dom import ValidationErr
 import requests
 from requests.exceptions import Timeout
@@ -498,3 +499,118 @@ class Galaxy:
         except requests.exceptions.RequestException as e:
             raise e
 
+
+class Hootenanny:
+    @classmethod
+    def filters(cls,mapping):
+        nodes = set()
+        ways = set()
+        relations = set()
+        for t in mapping.themes:
+            parts = cls.parts(t.matcher.expr)
+            if t.points:
+                for part in parts:
+                    nodes.add(part)
+            if t.lines:
+                for part in parts:
+                    ways.add(part)
+            if t.polygons:
+                for part in parts:
+                    ways.add(part)
+                    relations.add(part)
+        return nodes,ways,relations
+
+    # force quoting of strings to handle keys with colons
+    @classmethod
+    def parts(cls, expr):
+        def _parts(prefix):
+            op = prefix[0]
+            if op == '=':
+                return ["['{0}'='{1}']".format(prefix[1],prefix[2])]
+            if op == '!=':
+                return ["['{0}'!='{1}']".format(prefix[1],prefix[2])]
+            if op in ['<','>','<=','>='] or op == 'notnull':
+                return ["['{0}']".format(prefix[1])]
+            if op == 'in':
+                x = "['{0}'~'{1}']".format(prefix[1],'|'.join(prefix[2]))
+                return [x]
+            if op == 'and' or op == 'or':
+                return _parts(prefix[1]) + _parts(prefix[2])
+        return _parts(expr)
+
+    @classmethod
+    def sql(cls,str):
+        return cls.parts(to_prefix(str))
+
+    def __init__(self,hostname,geom,path,use_existing=True,mapping=None,extensions=['shp'], name=None, schemas_config = {}, maxGridSize=1.0):
+        self.hostname = hostname
+        self._path = path
+        self.geom = geom
+        self.use_existing = use_existing
+        self.mapping = mapping
+        self.extensions = extensions
+        self.schemas_config = schemas_config
+        self.name = name
+        self.maxGridSize= maxGridSize
+
+    def fetch(self):
+        base_template = Template('[out:json][bbox];$query;out meta;')
+        if self.geom.geom_type == 'Polygon':
+            geom = ';'.join(['{0},{1}'.format(*x) for x in self.geom.exterior.coords])
+        else:
+            bounds = self.geom.bounds
+            west = max(bounds[0], -180)
+            south = max(bounds[1], -90)
+            east = min(bounds[2], 180)
+            north = min(bounds[3], 90)
+            geom = '{1},{0},{3},{2}'.format(west, south, east, north)
+
+        if self.mapping:
+            query = """(
+                (
+                    {0}
+                );
+                (
+                    {1}
+                );>;
+                (
+                    {2}
+                );>>;>;)"""
+            nodes,ways,relations = Hootenanny.filters(self.mapping)
+            nodes = '\n'.join(['node{0};'.format(f) for f in nodes])
+            ways = '\n'.join(['way{0};'.format(f) for f in ways])
+            relations = '\n'.join(['relation{0};'.format(f) for f in relations])
+            query = query.format(nodes,ways,relations)
+        else:
+            query = '(node;<;>>;>;)'
+
+        data = base_template.substitute(maxsize=2147483648,timeout=1600,query=query)
+
+        # create a temporary file that holds the oql query
+        tmp = tempfile.NamedTemporaryFile();
+        with open(tmp.name, 'w') as f: f.write(data)
+
+        path_str = self._path
+        temp_pbf = os.path.join(path_str, '{0}.osm.pbf'.format(self.name))
+
+        subprocess.check_call([
+            'hoot', 'convert', '-D', 'overpass.api.query.path={0}'.format(tmp.name),
+                               '-D', 'bounds={0}'.format(geom),
+                               '-D', 'reader.http.bbox.max.download.size={0}'.format(self.maxGridSize), # override api read limit
+                                self.hostname, temp_pbf
+        ])
+
+        for ext in self.extensions:
+            for schema in self.schemas_config:
+                command_arr = ['hoot','convert','-D','schema.translation.script={0}'.format(self.schemas_config[schema])]
+                if schema != 'OSM':
+                    command_arr += ['-D', 'schema.translation.direction=toogr']
+                command_arr += [temp_pbf, os.path.join(path_str, '{0}.{1}.{2}'.format(self.name, schema, ext))]
+                subprocess.check_call(command_arr)
+
+    def path(self):
+        if os.path.isfile(self._path) and self.use_existing:
+            return self._path
+        else:
+            self.fetch()
+        return self._path
