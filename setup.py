@@ -6,24 +6,24 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 requirements = [
-    'osmium~=2.15',
-    'pyparsing~=2.4',
+    'osmium',
+    'pyparsing',
     'pyyaml',
-    'shapely~=1.6',
-    'requests~=2.22.0',
-    'landez~=2.5.0'
+    'shapely',
+    'requests',
+    'landez'
 ]
 
 setuptools.setup(
     name="osm-export-tool",
-    version="0.0.29",
-    author="Brandon Liu",
-    author_email="brandon.liu@hotosm.org",
+    version="0.1.0",
+    author="Maxar Technologies",
+    author_email="foundationgeoint-packaging@maxar.com",
     description="Convert OpenStreetMap data into GIS and mobile mapping file formats.",
     license="BSD-3-Clause",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/hotosm/osm-export-tool-python",
+    url="https://github.com/radiant-maxar/osm-export-tool-python",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
