@@ -597,7 +597,7 @@ class Hootenanny:
             'hoot', 'convert', '-D', 'overpass.api.query.path={0}'.format(tmp.name),
                                '-D', 'bounds={0}'.format(geom),
                                '-D', 'reader.http.bbox.max.download.size={0}'.format(self.maxGridSize), # override api read limit
-                                self.hostname, temp_pbf
+                                os.path.join(self.hostname, 'api', 'interpreter'), temp_pbf
         ])
 
         for ext in self.extensions:

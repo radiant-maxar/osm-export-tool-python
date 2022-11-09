@@ -4,7 +4,7 @@ from enum import Enum
 from shapely.geometry import shape, MultiPolygon, Polygon
 
 name = 'osm_export_tool'
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 class GeomType(Enum):
     POINT = 1
