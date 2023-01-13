@@ -8,6 +8,7 @@ import requests
 from requests.exceptions import Timeout
 from string import Template
 from osm_export_tool.sql import to_prefix
+from urllib.parse import urlparse
 import shapely.geometry
 
 # path must return a path to an .osm.pbf or .osm.xml on the filesystem
@@ -593,8 +594,11 @@ class Hootenanny:
         path_str = self._path
         temp_pbf = os.path.join(path_str, '{0}.osm.pbf'.format(self.name))
 
+        parsed_hostname = urlparse(self.hostname).hostname
+
         subprocess.check_call([
-            'hoot', 'convert', '-D', 'overpass.api.query.path={0}'.format(tmp.name),
+            'hoot', 'convert', '-D', 'overpass.api.host={0}'.format(parsed_hostname),
+                               '-D', 'overpass.api.query.path={0}'.format(tmp.name),
                                '-D', 'bounds={0}'.format(geom),
                                '-D', 'reader.http.bbox.max.download.size={0}'.format(self.maxGridSize), # override api read limit
                                 os.path.join(self.hostname, 'api', 'interpreter'), temp_pbf
