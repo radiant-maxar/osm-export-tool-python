@@ -7,6 +7,7 @@ from xml.dom import ValidationErr
 import requests
 from requests.exceptions import Timeout
 from string import Template
+from urllib.parse import urlparse
 from osm_export_tool.sql import to_prefix
 from urllib.parse import urlparse
 import shapely.geometry
@@ -502,6 +503,8 @@ class Galaxy:
 
 
 class Hootenanny:
+    valid_out_types = ['json','xml']
+
     @classmethod
     def filters(cls,mapping):
         nodes = set()
@@ -543,7 +546,12 @@ class Hootenanny:
     def sql(cls,str):
         return cls.parts(to_prefix(str))
 
-    def __init__(self,hostname,geom,path,use_existing=True,mapping=None,extensions=['shp'], name=None, schemas_config = {}, maxGridSize=1.0):
+    def __init__(self,hostname,geom,path,use_existing=True,mapping=None,extensions=['shp'], name=None, schemas_config = {}, maxGridSize=1.0, out_type='xml'):
+        if out_type not in self.valid_out_types:
+            raise ValueError(
+                f'out_type "{out_type}" found in valid_out_types {",".join(self.valid_out_types)}'
+            )
+
         self.hostname = hostname
         self._path = path
         self.geom = geom
@@ -552,10 +560,11 @@ class Hootenanny:
         self.extensions = extensions
         self.schemas_config = schemas_config
         self.name = name
-        self.maxGridSize= maxGridSize
+        self.maxGridSize = maxGridSize
+        self.out_type = out_type
 
     def fetch(self):
-        base_template = Template('[out:json][bbox];$query;out meta;')
+        base_template = Template(f'[out:{self.out_type}][bbox];$query;out meta;')
         if self.geom.geom_type == 'Polygon':
             geom = ';'.join(['{0},{1}'.format(*x) for x in self.geom.exterior.coords])
         else:
@@ -601,7 +610,7 @@ class Hootenanny:
                                '-D', 'overpass.api.query.path={0}'.format(tmp.name),
                                '-D', 'bounds={0}'.format(geom),
                                '-D', 'reader.http.bbox.max.download.size={0}'.format(self.maxGridSize), # override api read limit
-                                os.path.join(self.hostname, 'api', 'interpreter'), temp_pbf
+                               os.path.join(self.hostname, 'api', 'interpreter'), temp_pbf
         ])
 
         for ext in self.extensions:
